@@ -1,0 +1,278 @@
+#include <blas.h>
+#include "grid2.h"
+#include "perm.h"
+#include "givens.h"
+
+// Column major grid dissection order for the sparse 
+// QR decomposition algorithm.
+void grid_dissection_order( const grid2 &g0,
+			    int *perm )
+{
+  int width = Width(g0);
+  int height = Height(g0);
+  int size = width*height;
+
+  int mid, x, y, i, *p;
+  grid2 g1, g2, gs;
+  g1 = g2 = gs = g0;
+
+  if( width >= 4 || height >= 4 ) {
+    if( width < height ) {
+      mid = height / 2;
+
+      // 1st grid
+      g1.ran[1][1] = g0.ran[1][0] + mid-1;
+
+      // 2nd grid
+      g2.base = g0.base + Size(g1);
+      g2.ran[1][0] = g0.ran[1][0] + mid+1;
+      
+      // Separating grid
+      gs.base = g2.base + Size(g2);
+      gs.ran[1][0] = g0.ran[1][0] + mid-1;
+      gs.ran[1][1] = g0.ran[1][0] + mid+1;
+
+      for( i=g0.base, p=perm+i; i < size; ++i, ++p ) {
+	Node(g0,i,x,y);
+
+	if( y >= g2.ran[1][0] ) {*p = Index(g2,x,y); continue;}
+	if( y >= gs.ran[1][0] ) {*p = Index(gs,x,y); continue;}
+
+	*p = Index(g1,x,y);
+      } // for( i, p )
+      
+      grid_dissection_order( g1, perm );
+      grid_dissection_order( g2, perm );
+    } else { // width >= height
+      mid = width / 2;
+
+      // 1st grid
+      g1.ran[0][1] = g0.ran[0][0] + mid-1;
+
+      // 2nd grid
+      g2.base = g0.base + Size(g1);
+      g2.ran[0][0] = g0.ran[0][0] + mid+1;
+      
+      // Separating grid
+      gs.base = g2.base + Size(g2);
+      gs.ran[0][0] = g0.ran[0][0] + mid-1;
+      gs.ran[0][1] = g0.ran[0][0] + mid+1;
+      
+      i = Index(g0,gs.ran[0][0],gs.ran[0][1]);
+      for( p=perm+i; i < size; ++i, ++p ) {
+	Node(g0,i,x,y);
+	
+	if( x >= g2.ran[0][0] ) {*p = Index(g2,x,y); continue;}
+	if( x >= gs.ran[0][0] ) {*p = Index(gs,x,y); continue;}
+      } // for( i, p )
+      
+      grid_dissection_order( g1, perm );
+      grid_dissection_order( g2, perm );
+    } // if( width < height )
+  }
+}
+
+
+// Compute a good row permutation given a column permutation for the
+// sparse QR decomposition algorithm.
+void row_order( const grid2 &g, const int *col_perm, int *row_perm )
+{
+  int size = Size(g);
+  int x, y, i, j, e;
+
+  int *q = inverse_perm( col_perm, size );
+  int *p = row_perm;
+
+  for( i=0, j=0; i < size; ++i ) {
+    Node(g,q[i],x,y);
+    
+    if( InGrid2(g,x-1,y) ) {
+      e = HEIndex(g,x-1,y);
+      p[e] = j++;
+    }
+
+    if( InGrid2(g,x,y-1) ) {
+      e = VEIndex(g,x,y-1);
+      p[e] = j++;
+    }
+  }
+  
+  free_perm(q);
+}
+
+
+void sparse_qr_decomp( int m, int n, 
+		       const int *p1, const int *p2,
+		       const sparse_mat &A,
+		       rotation   *Q,
+		       sparse_mat *R )
+{
+  sparse_vec **rows = calloc(m,sizeof(sparse_vec*));
+}
+
+/*
+
+(* Computes Q*P1*D*P2 = R *)
+let qr_decomp row_perm d col_perm =
+  let num_cols = Perm.dim col_perm
+  and num_rows = Perm.dim row_perm in
+
+  let q = Rot.create num_rows in
+  let r = Array.make num_rows (SpVec.empty num_cols) in
+
+  let rec proc_row j =
+    if j < num_rows then begin
+      r.(j) <- SpMat.row d j;
+(*
+      printf "Processing row %5d....%6d rotations....memory usage %.2fM...\n" 
+	j (!nrots) (mem_use ());
+      flush_all ();
+*)
+      (* This function is used to compute the sequence of rotatations that
+	 will move the i'th row into the upper triangular form of r. *)
+      let rec rotate () =
+	nrots := (!nrots) + 1;
+(*
+	if !nrots > 999999 then exit (-1) else nrots := (!nrots) + 1;
+	printf "\b\b\b\b\b\b%6d" (!nrots); flush_all ();
+*)
+	let idx_j = SpVec.indices r.(j)
+	and val_j = SpVec.values  r.(j)
+	and nnz_j = SpVec.nnz     r.(j) in
+	  
+	if nnz_j = 0 then () else
+	  let i = array_get idx_j 0
+	  and b = array_get val_j 0 in
+	    
+	    if i < j then begin
+	      let row_i = r.(i) in
+	      let idx_i = SpVec.indices row_i
+	      and val_i = SpVec.values  row_i
+	      and nnz_i = SpVec.nnz     row_i in
+
+	      let rot =
+		if nnz_i = 0 || array_get idx_i 0 > i
+		then Rot.compute 0.0 b
+		else 
+		  let a = array_get val_i 0 in
+		    Rot.compute a b
+	      in
+
+	      let (vi, vj) = Rot.apply_sp rot r.(i) r.(j) in
+		r.(i) <- vi;
+		r.(j) <- vj;
+
+		Rot.comp_left q (i,j) rot;
+
+		rotate ()
+	    end else ()
+      in
+
+	rotate ();
+	proc_row (j+1)
+    end else ()
+  in
+
+    SpMat.permute_rows    d row_perm;
+    SpMat.permute_columns d col_perm;
+
+    proc_row 0;
+
+(*
+
+    let alrm = Gc.create_alarm (fun () ->
+				  printf "FULL MAJOR SWEEP...live mem %.2gM...\n" (mem_use ()))
+    in
+      (*print_string "\n*** Begin GC Stats ***\n"; Gc.print_stat stdout;
+	print_string "*** End GC Stats ***\n\n"*)
+
+    for j = 0 to num_rows - 1 do
+      r.(j) <- SpMat.row d j;
+
+(*
+      Gc.full_major ();
+      print_string "\n*** Begin GC Stats ***\n"; Gc.print_stat stdout;
+      print_string "*** End GC Stats ***\n\n";
+*)
+
+      printf "Processing row %5d....%6d rotations....live mem %.2gM...\n" 
+	j (!nrots) (mem_use ());
+      flush_all ();
+
+      (* This function is used to compute the sequence of rotatations that
+	 will move the i'th row into the upper triangular form of r. *)
+(*
+	if !nrots > 999999 then exit (-1) else nrots := (!nrots) + 1;
+	printf "\b\b\b\b\b\b%6d" (!nrots); flush_all ();
+*)
+      while SpVec.nnz r.(j) > 0 && array_get (SpVec.indices r.(j)) 0 < j do
+	nrots := (!nrots) + 1;
+	  
+	let row_j = r.(j) in
+	let idx_j = SpVec.indices row_j
+	and val_j = SpVec.values  row_j
+	and nnz_j = SpVec.nnz     row_j in
+	
+	let i = array_get idx_j 0
+	and b = array_get val_j 0 in
+	  
+	let row_i = r.(i) in
+	let idx_i = SpVec.indices row_i
+	and val_i = SpVec.values  row_i
+	and nnz_i = SpVec.nnz     row_i in
+	  
+	let rot =
+	  if nnz_i = 0 || array_get idx_i 0 > i
+	  then Rot.compute 0.0 b
+	  else 
+	    let a = array_get val_i 0 in
+	      Rot.compute a b
+	in
+	  
+	let (vi, vj) = Rot.apply_sp rot r.(i) r.(j) in
+	  r.(i) <- vi;
+	  r.(j) <- vj;
+(*
+	  Gc.finalise 
+	    (fun v -> 
+	       printf "freeing sparse row %d created while processing row %d, (i=%d,j=%d)\n" i j i j)
+	    vi;
+
+	  Gc.finalise 
+	    (fun v -> 
+	       printf "freeing sparse row %d created while processing row %d, (i=%d,j=%d)\n" j j i j)
+	    vj;
+*)	  
+	  Rot.comp_left q (i,j) rot;
+      done
+    done;
+*)      
+  let nnz = Array.fold_left
+    (fun nnz row -> nnz + (SpVec.nnz row))
+    0 r
+  in
+
+  let is = Array.make nnz 0
+  and js = Array.make nnz 0
+  and vs = Array.make nnz 0.0 in
+    
+  let rec fill_vecs k i =
+    if i < num_rows then begin
+      let row = r.(i) in
+      let nnz = SpVec.nnz row in
+	
+	Array.fill is k nnz i;
+	Array.blit (SpVec.indices row) 0 js k nnz;
+	Array.blit (SpVec.values  row) 0 vs k nnz;
+	
+	fill_vecs (k+nnz) (i+1)
+    end else ()
+  in fill_vecs 0 0;
+
+  let r = SpMat.create num_rows num_cols (is,js) vs 
+    ~order: `row_major 
+  in
+
+    ( q, r )
+;;
+*/

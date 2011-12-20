@@ -1,0 +1,9 @@
+#ifndef SPARSE_QR_DECOMP_H
+#define SPARSE_QR_DECOMP_H
+
+#include "grid2.h"
+#include "perm.h"
+#include "givens.h"
+#include "sparse.h"
+
+void grid_dissection_order( const grid2 *g0, int *perm )

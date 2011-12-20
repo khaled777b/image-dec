@@ -1,0 +1,52 @@
+SPBLAS_DIR = spblas_0_8
+SRC_DIR = src
+BIN_DIR = bin
+
+CPPFLAGS += -I$(SPBLAS_DIR) -I$(SRC_DIR)
+CFLAGS += -g
+CXXFLAGS += -g
+
+MEX_DIR = $(SRC_DIR)/mex
+MEX_EXT = mexglx
+MEX_OPTS = -g
+MEX = /opt/matlab/bin/mex $(MEX_OPTS) $(CPPFLAGS)
+
+CBLAS = -lcblas -latlas
+
+PROGS = $(BIN_DIR)/geopt $(BIN_DIR)/spqr_mat
+LIBS = $(SPBLAS_DIR)/libsparseblas.a $(BIN_DIR)/libgeopt.a
+
+OBJS = \
+	$(SRC_DIR)/sparse.o \
+	$(SRC_DIR)/sparse_qr_decomp.o \
+
+MEX_OBJS = \
+	$(MEX_DIR)/spqr_mat.o \
+	$(MEX_DIR)/sparse_mx.o
+
+MEX_FUNS = \
+	$(MEX_DIR)/spqr_grid2.$(MEX_EXT)
+
+all: $(MEX_FUNS) $(PROGS)
+
+clean:
+	rm -f $(PROGS) $(LIBS) $(MEX_FUNS) $(OBJS) $(MEX_OBJS);
+	make -C $(SPBLAS_DIR) clean
+
+$(BIN_DIR)/geopt: $(SRC_DIR)/main.o $(LIBS)
+	$(CXX) -o $@ $(CXXFLAGS) $(CBLAS) $^
+
+$(BIN_DIR)/spqr_mat: $(MEX_OBJS) $(LIBS)
+	$(MEX) -f '/opt/matlab/bin/engopts.sh' -outdir $(BIN_DIR) $(CBLAS) $^
+
+$(BIN_DIR)/libgeopt.a: $(OBJS)
+	$(AR) rcs $@ $(OBJS)
+
+$(SPBLAS_DIR)/libsparseblas.a:
+	$(MAKE) -C $(SPBLAS_DIR)
+
+$(MEX_OBJS): %.o: %.c
+	$(MEX) -c -outdir $(MEX_DIR) $<
+
+$(MEX_FUNS): %.$(MEX_EXT): %.c $(MEX_OBJS) $(LIBS)
+	$(MEX) -outdir matlab $(CBLAS) $^

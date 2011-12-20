@@ -7,7 +7,6 @@
 
 #include <boost/numeric/mtl/mtl.hpp>
 
-
 typedef mtl::dense_vector< double > vector_t;
 
 #endif
