@@ -9,10 +9,16 @@ include_directories(
   "${SDL_INCLUDE_DIR}"
   )
 
-set( SRCS "${PROJECT_SOURCE_DIR}/src/main.cpp" )
+link_directories(
+  "${Boost_LIBRARY_DIRS}"
+  )
 
-set( LIBS "${SDL_LIBRARY}" )
+add_executable( image-dec
+   ${PROJECT_SOURCE_DIR}/src/main.cpp
+   )
 
-add_executable( image-dec ${SRCS} )
-
-target_link_libraries( image-dec "${LIBS}" )
+target_link_libraries( image-dec
+  boost_program_options
+  ${SDL_LIBRARY}
+  tiff jpeg png
+  )

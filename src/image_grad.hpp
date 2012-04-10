@@ -7,23 +7,24 @@
 
 #include <boost/numeric/mtl/mtl.hpp>
 
-typedef mtl::compressed2D< double > grad_op;
 
-struct image_grad_op :
-  public grad_op
+struct image_grad_op
 {
-  image_grad_op( size_t w, size_t h ) :
-    grad_op( (w-1)*h + w*(h-1), w*h )
+  typedef mtl::compressed2D< double > grad_op;
+  typedef unsigned long size_type;
+  
+  image_grad_op( size_type w, size_type h ) :
+    m_op( (w-1)*h + w*(h-1), w*h )
   {
-    mtl::matrix::inserter< grad_op > D( *this, 2 );
+    mtl::matrix::inserter< grad_op > D( m_op, 2 );
     
     // First we compute the horizontal components of the gradient.
-    size_t i = 0;
-    for( size_t y = 0; y < h; ++y )
-      for( size_t x = 1; x < w; ++x )
+    size_type i = 0;
+    for( size_type y = 0; y < h; ++y )
+      for( size_type x = 1; x < w; ++x )
         {
-          const size_t j1 = x + y * h;
-          const size_t j0 = j1 - 1;
+          const size_type j1 = x + y * h;
+          const size_type j0 = j1 - 1;
           
           D( i, j1 ) <<  1.0;
           D( i, j0 ) << -1.0;
@@ -31,11 +32,12 @@ struct image_grad_op :
           ++i;
         }
 
-    for( size_t y = 1; y < h; ++y )
-      for( size_t x = 0; x < w; ++x )
+    // Then we compute the vertical components of the gradient.
+    for( size_type y = 1; y < h; ++y )
+      for( size_type x = 0; x < w; ++x )
         {
-          const size_t j1 = x + y * h;
-          const size_t j0 = j1 - h;
+          const size_type j1 = x + y * h;
+          const size_type j0 = j1 - h;
           
           D( i, j1 ) <<  1.0;
           D( i, j0 ) << -1.0;
@@ -43,7 +45,13 @@ struct image_grad_op :
           ++i;
         }
   }  
-  
+
+  const grad_op& operator() () const 
+  {
+    return m_op;
+  }
+private:
+  grad_op m_op;
 };
 
 

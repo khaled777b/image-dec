@@ -81,12 +81,15 @@ vector_t nth_channel_vector( const image_t& image, size_t n = 0 )
 }
 
 
-template< typename ImageView >
-void nth_channel_from_vector( const vector_t& u, ImageView& image, size_t n = 0 )
+template< typename Image >
+void nth_channel_from_vector( const vector_t& u, Image& image, size_t n = 0 )
 {
   using namespace boost::gil;
+
+  vector_to_image_channel vec_to_chan( u, n );
+  return vec_to_chan( view( image ) );
   
-  return apply_operation( view( image ), vector_to_image_channel( u, n ) );
+  // return apply_operation( view( image ), vector_to_image_channel( u, n ) );
 }
 
 

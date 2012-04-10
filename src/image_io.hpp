@@ -90,4 +90,29 @@ void read_image( const std::string& path, image_t& image )
     }
 }
 
+template< typename Image >
+void write_image( const std::string& path, Image& image )
+{
+  std::string dir, filename, ext;
+  
+  split_path( path, dir, filename, ext );
+  
+  if( is_ext( ext, jpeg_ext ) )
+    {
+      boost::gil::jpeg_write_view( path, view( image ) );
+    }
+  else if( is_ext( ext, tiff_ext ) )
+    {
+      boost::gil::tiff_write_view( path, view( image ) );
+    }
+  else if( is_ext( ext, png_ext ) )
+    {
+      boost::gil::png_write_view( path, view( image ) );
+    }
+  else
+    {
+      throw bad_file_type( ext );
+    }
+}
+
 #endif
