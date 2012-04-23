@@ -7,16 +7,15 @@
 
 #include <cmath>
 
-#include <boost/math/special_functions/round.hpp>
+#include <boost/math/special_functions.hpp>
+
 #include <boost/numeric/interval.hpp>
 #include <boost/numeric/mtl/mtl.hpp>
 
-using boost::lround;
-
 struct image_zoom_op
 {
-  typedef mtl::compressed2D< double > zoom_op;
-  typedef boost::interval< double >  interval;
+  typedef mtl::compressed2D< double >         zoom_op;
+  typedef boost::numeric::interval< double >  interval;
   
   typedef unsigned long  size_type;
   typedef double         scale_type;
@@ -24,6 +23,8 @@ struct image_zoom_op
   image_zoom_op( size_type w, size_type h, scale_type scale ) :
     m_op( w*h, w*h )
   {
+    using boost::math::lround;
+
     const size_type  W = ceil( scale * w );
     const size_type  H = ceil( scale * h );
     const scale_type rho = 1.0 / m_scale;
@@ -31,8 +32,8 @@ struct image_zoom_op
     mtl::matrix::inserter< zoom_op > A( m_op, lround( scale*scale ) );
     
     size_type i = 0;
-    for( interval i2( 0, scale ); i2.min() < W; i2 += scale )
-      for( interval i1( 0, scale ); i1.min() < W; i1 += scale, ++i )
+    for( interval i2( 0, scale ); lower(i2) < W; i2 += scale )
+      for( interval i1( 0, scale ); lower(i1) < W; i1 += scale, ++i )
         {
           for( size_type y = floor( lower(i2) ); y < ceil( upper(i2) ); ++y )
             for( size_type x = floor( lower(i1) ); x < ceil( upper(i1) ); ++x )
@@ -48,9 +49,9 @@ struct image_zoom_op
 
                 A( i, j ) << rho * area;
               }
-          }
-      }  
+        }
   }
+  
 
   const zoom_op& operator() () const 
   {

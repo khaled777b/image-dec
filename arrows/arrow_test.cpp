@@ -43,12 +43,14 @@ int main()
   // BOOST_PROTO_AUTO( a, launch_simple( arr( test_fun1 )
   //                                     >> arr( test_fun2 ) ) );
 
-  fusion::vector< const char* > hello =
-    launch_simple( arr( test_fun1 ) >> arr( test_fun2 ) )();
+  // fusion::vector< const char* > hello =
+  //   launch_simple( arr( test_fun1 ) >> arr( test_fun2 ) )();
   
-  std::cout << fusion::front( hello ) << std::endl;
+  // std::cout << fusion::front( hello ) << std::endl;
 
-  // launch_simple( ( hello, world ) >> concat >> print );
+  launch_simple( ( arr( hello ), arr( world ) )
+                 >> arr( concat )
+                 >> arr( print ) )();
 
   return 0;
 }
