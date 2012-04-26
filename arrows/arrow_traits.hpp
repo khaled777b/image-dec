@@ -12,6 +12,7 @@
 #include <boost/mpl/assert.hpp>
 #include <boost/mpl/logical.hpp>
 #include <boost/mpl/comparison.hpp>
+#include <boost/mpl/remove.hpp>
 
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/container/vector/convert.hpp>
@@ -36,9 +37,19 @@ namespace arrows {
     template< typename T >
     struct function_input
     {
+      typedef
+      boost::function_types::parameter_types<T>
+      param_types;
+      
       typedef typename
-      fusion::result_of::as_vector<
-        boost::function_types::parameter_types<T>
+      mpl::remove< param_types, void >::type
+      non_void_params;
+
+      typedef typename
+      mpl::if_<
+        mpl::empty< non_void_params >,
+        fusion::vector0<>,
+        typename fusion::result_of::as_vector< non_void_params >::type
         >::type
       type;
     };
@@ -46,9 +57,16 @@ namespace arrows {
     template< typename T >
     struct function_output
     {
-      typedef fusion::vector< 
-        typename boost::function_types::result_type<T>::type
-        >
+      typedef typename
+      boost::function_types::result_type<T>::type
+      result_type;
+      
+      typedef typename
+      mpl::if_<
+        boost::is_same< result_type, void >,
+        fusion::vector0<>,
+        fusion::vector< result_type >
+        >::type
       type;
     };
   }
@@ -126,15 +144,21 @@ namespace arrows {
     typedef arrow_traits< left_type >   left_traits;
     typedef arrow_traits< right_type >  right_traits;
     
-    typedef typename fusion::result_of::join<
-      typename left_traits::input_type,
-      typename right_traits::input_type
+    typedef typename
+    fusion::result_of::as_vector<
+      typename fusion::result_of::join<
+        typename left_traits::input_type,
+        typename right_traits::input_type
+        >::type
       >::type
     input_type;
     
-    typedef typename fusion::result_of::join<
-      typename left_traits::output_type,
-      typename right_traits::output_type
+    typedef typename
+    fusion::result_of::as_vector<
+      typename fusion::result_of::join<
+        typename left_traits::output_type,
+        typename right_traits::output_type
+        >::type
       >::type
     output_type;
   };
@@ -157,9 +181,12 @@ namespace arrows {
                             typename right_traits::input_type )
                           );
     
-    typedef typename fusion::result_of::join<
-      typename left_traits::output_type,
-      typename right_traits::output_type
+    typedef typename
+    fusion::result_of::as_vector<
+      typename fusion::result_of::join<
+        typename left_traits::output_type,
+        typename right_traits::output_type
+        >::type
       >::type
     output_type;
   };

@@ -1,6 +1,8 @@
 #ifndef ARROWS_SIMPLE_LAUNCHER_HPP
 #define ARROWS_SIMPLE_LAUNCHER_HPP
 
+#include <boost/utility/enable_if.hpp>
+
 #include <boost/function_types/function_type.hpp>
  
 #include <boost/fusion/iterator/advance.hpp>
@@ -42,10 +44,14 @@ namespace arrows
         typedef typename arrow_traits< Expr >::input_type   input_type;
         typedef typename arrow_traits< Expr >::output_type  output_type;
 
-        struct arr
+        template< bool empty_output, typename dummy = void >
+        struct arr;
+
+        template< typename dummy >
+        struct arr< false, dummy >
         {
           typedef output_type result_type;
-
+          
           typedef typename fusion::result_of::make_fused<
             typename proto::result_of::value< Expr >::type
             >::type
@@ -59,16 +65,38 @@ namespace arrows
           {
             return fusion::make_vector( m_fused( x ) );
           }
-          
         private:
           fused_function_type m_fused;
         };
 
-        typedef arr result_type;
+        template< typename dummy >
+        struct arr< true, dummy >
+        {
+          typedef output_type result_type;
+          
+          typedef typename fusion::result_of::make_fused<
+            typename proto::result_of::value< Expr >::type
+            >::type
+          fused_function_type;
+
+          arr( const Expr& expr ) :
+            m_fused( fusion::make_fused( proto::value( expr ) ) )
+          {}
+          
+          result_type operator() ( const input_type& x )
+          {
+            m_fused( x );
+            return fusion::vector0<>();
+          }
+        private:
+          fused_function_type m_fused;
+        };
+
+        typedef arr< fusion::result_of::empty< output_type >::value > result_type;
         
         result_type operator() ( const Expr& expr, const simple_evaluator& ctx )
         {
-          return arr( expr );
+          return result_type( expr );
         }
       };
 
@@ -129,18 +157,25 @@ namespace arrows
         typedef typename arrow_traits< right_arrow >::input_type   right_input;
         typedef typename arrow_traits< right_arrow >::output_type  right_output;
 
-        struct pair
+        template< bool left_empty, bool right_empty, typename dummy = void >
+        struct pair;
+
+        template< typename dummy >
+        struct pair< false, false, dummy >
         {
           typedef typename 
-          fusion::result_of::join< left_input, right_input >::type
+          fusion::result_of::as_vector< 
+            typename fusion::result_of::join< left_input, right_input >::type
+            >::type
           input_type;
           
           typedef typename 
-          fusion::result_of::join< left_output, right_output >::type
+          fusion::result_of::as_vector< 
+            typename fusion::result_of::join< left_output, right_output >::type
+            >::type
           output_type;
 
           typedef output_type result_type;
-
 
           pair( const Expr& expr, const simple_evaluator& ctx ) :
             m_ctx( ctx ),
@@ -148,62 +183,66 @@ namespace arrows
             m_right( proto::right( expr ) )
           {}
 
-          left_input first( const input_type& x )
-          {
-            typedef typename
-              fusion::result_of::size< left_input >::type
-              Size;
-            
-            typedef typename
-              fusion::result_of::begin< input_type >::type
-              Begin;
-            
-            typedef typename
-              fusion::result_of::advance< Begin, Size >::type
-              End;
-
-            typedef fusion::iterator_range< Begin, End > Range;
-            
-            Begin begin( x );
-            End   end( x );
-            
-            return left_input( Range( begin, end ) );
-          }
-
-          right_input second( const input_type& x )
-          {
-            typedef typename
-              fusion::result_of::size< left_input >::type
-              LSize;
-            
-            typedef typename
-              fusion::result_of::begin< input_type >::type
-              LBegin;
-
-            typedef typename
-              fusion::result_of::size< right_input >::type
-              Size;
-
-            typedef typename
-              fusion::result_of::advance< LBegin, LSize >::type
-              Begin;
-            
-            typedef typename
-              fusion::result_of::advance< Begin, Size >::type
-              End;
-
-            typedef fusion::iterator_range< Begin, End > Range;
-            
-            Begin begin( x );
-            End   end( x );
-            
-            return right_input( Range( begin, end ) );
-          }
-          
           output_type operator() ( const input_type& x )
           {
-            return fusion::join( proto::eval( m_left,  m_ctx )( first( x ) ),
-                                 proto::eval( m_right, m_ctx )( second( x ) ) );
+            typedef typename
+              fusion::result_of::size< left_input >::type
+              left_size;
+
+            typedef typename fusion::result_of::begin< input_type >::type
+              begin_iter;
+          
+            typedef typename fusion::result_of::advance< begin_iter, left_size >::type
+              mid_iter;
+            
+            typedef typename fusion::result_of::end< input_type >::type
+              end_iter;
+
+            typedef fusion::iterator_range< begin_iter, mid_iter >
+              left_range;
+            
+            typedef fusion::iterator_range< mid_iter, end_iter >
+              right_range;
+
+            begin_iter begin = fusion::begin( x );
+            mid_iter   mid   = fusion::advance( x, left_size::value );
+            end_iter   end   = fusion::end( x );
+            
+            left_range   first( begin, mid );
+            right_range  second( mid, end );
+            
+            return fusion::as_vector( fusion::join( proto::eval( m_left,  m_ctx )( first ),
+                                                    proto::eval( m_right, m_ctx )( second ) ) );
+          }
+        private:
+          const simple_evaluator&  m_ctx;
+          const left_arrow&        m_left;
+          const right_arrow&       m_right;
+        };
+
+        template< typename dummy >
+        struct pair< true, false, dummy >
+        {
+          typedef right_input input_type;
+          
+          typedef typename 
+          fusion::result_of::as_vector< 
+            typename fusion::result_of::join< left_output, right_output >::type
+            >::type
+          output_type;
+
+          typedef output_type result_type;
+
+          pair( const Expr& expr, const simple_evaluator& ctx ) :
+            m_ctx( ctx ),
+            m_left( proto::left( expr ) ), 
+            m_right( proto::right( expr ) )
+          {}
+
+          output_type operator() ( const input_type& x )
+          {
+            return fusion::as_vector( fusion::join( proto::eval( m_left,  m_ctx )( fusion::vector0<>() ),
+                                                    proto::eval( m_right, m_ctx )( x ) ) );
           }
         private:
           const simple_evaluator&  m_ctx;
@@ -211,11 +250,73 @@ namespace arrows
           const right_arrow&       m_right;
         };
         
-        typedef pair result_type;
+        template< typename dummy >
+        struct pair< false, true, dummy >
+        {
+          typedef left_input input_type;
+          
+          typedef typename 
+          fusion::result_of::as_vector< 
+            typename fusion::result_of::join< left_output, right_output >::type
+            >::type
+          output_type;
+
+          typedef output_type result_type;
+
+          pair( const Expr& expr, const simple_evaluator& ctx ) :
+            m_ctx( ctx ),
+            m_left( proto::left( expr ) ), 
+            m_right( proto::right( expr ) )
+          {}
+
+          output_type operator() ( const input_type& x )
+          {
+            return fusion::as_vector( fusion::join( proto::eval( m_left,  m_ctx )( x ),
+                                                    proto::eval( m_right, m_ctx )( fusion::vector0<>() ) ) );
+          }
+        private:
+          const simple_evaluator&  m_ctx;
+          const left_arrow&        m_left;
+          const right_arrow&       m_right;
+        };
+
+        template< typename dummy >
+        struct pair< true, true, dummy >
+        {
+          typedef typename fusion::vector0<> input_type;
+          
+          typedef typename 
+          fusion::result_of::as_vector< 
+            typename fusion::result_of::join< left_output, right_output >::type
+            >::type
+          output_type;
+
+          typedef output_type result_type;
+
+          pair( const Expr& expr, const simple_evaluator& ctx ) :
+            m_ctx( ctx ),
+            m_left( proto::left( expr ) ), 
+            m_right( proto::right( expr ) )
+          {}
+
+          output_type operator() ( const input_type& x )
+          {
+            return fusion::as_vector( fusion::join( proto::eval( m_left,  m_ctx )( fusion::vector0<>() ),
+                                                    proto::eval( m_right, m_ctx )( fusion::vector0<>() ) ) );
+          }
+        private:
+          const simple_evaluator&  m_ctx;
+          const left_arrow&        m_left;
+          const right_arrow&       m_right;
+        };
+          
+        typedef pair< fusion::result_of::empty< left_input >::value,
+                      fusion::result_of::empty< right_input >::value >
+        result_type;
 
         result_type operator() ( const Expr& expr, const simple_evaluator& ctx )
         {
-          return pair( expr, ctx );
+          return result_type( expr, ctx );
         }
       };
 
@@ -237,7 +338,9 @@ namespace arrows
           typedef left_input  input_type;
           
           typedef typename 
-          fusion::result_of::join< left_output, right_output >::type
+          fusion::result_of::as_vector<
+            typename fusion::result_of::join< left_output, right_output >::type
+            >::type
           output_type;
 
           typedef output_type result_type;
@@ -251,8 +354,8 @@ namespace arrows
           
           output_type operator() ( const input_type& x )
           {
-            return fusion::join( proto::eval( m_left,  m_ctx )( x ),
-                                 proto::eval( m_right, m_ctx )( x ) );
+            return fusion::as_vector( fusion::join( proto::eval( m_left,  m_ctx )( x ),
+                                                    proto::eval( m_right, m_ctx )( x ) ) );
           }
         private:
           const simple_evaluator&  m_ctx;

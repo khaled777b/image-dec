@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include <boost/type_traits.hpp>
 #include <boost/proto/proto_typeof.hpp>
 
 #include "arrow.hpp"
@@ -7,24 +8,15 @@
 
 using namespace arrows;
 
-
-int test_fun1( void ) 
-{
-  return 1;
-}
-
-const char* test_fun2( int x ) 
-{
-  return "hello";
-}
-
 const char* hello() 
 {
+  // std::cout << "hello ";
   return "hello";
 }
 
 const char* world() 
 {
+  // std::cout << "world!";
   return "world";
 }
 
@@ -38,19 +30,24 @@ void print( const std::string& s )
   std::cout << s << std::endl;
 }
 
-int main() 
+int main()
 {
-  // BOOST_PROTO_AUTO( a, launch_simple( arr( test_fun1 )
-  //                                     >> arr( test_fun2 ) ) );
-
-  // fusion::vector< const char* > hello =
-  //   launch_simple( arr( test_fun1 ) >> arr( test_fun2 ) )();
-  
-  // std::cout << fusion::front( hello ) << std::endl;
-
   launch_simple( ( arr( hello ), arr( world ) )
                  >> arr( concat )
                  >> arr( print ) )();
 
+  // auto hello_arrow = ( arr( hello ), arr( world ) ) >> arr( concat ) >> arr( print );
+
+  // launch_simple( hello_arrow )();
+
+  // What I'd like to be able to do:
+
+  // ui::file_chooser   choose_file1, choose_file2;
+  // image::reader      read_image1, read_image2;
+  // image::convolution convolve;
+  // image::viewer      view;
+  
+  // auto prog = ( choose_file1, choose_file2 ) >> ( read_image1, read_image2 ) >> convolve >> view;
+      
   return 0;
 }
